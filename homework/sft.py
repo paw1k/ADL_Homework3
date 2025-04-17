@@ -129,3 +129,15 @@ if __name__ == "__main__":
     from fire import Fire
 
     Fire({"train": train_model, "load": load})
+
+
+def test_model(ckpt_path: str | None = None):  # noqa: D401
+    """Load the saved adapter (or one provided path) and print validation acc."""
+    path = Path(ckpt_path) if ckpt_path else Path(__file__).parent / "sft_model"
+    from peft import PeftModel
+    llm = BaseLLM()
+    llm.model = PeftModel.from_pretrained(llm.model, path).to(llm.device)
+    from .data import Dataset, benchmark
+    result = benchmark(llm, Dataset("valid"), max_question=50)
+    print(f"{result.accuracy=:.3f}  {result.answer_rate=:.3f}")
+
