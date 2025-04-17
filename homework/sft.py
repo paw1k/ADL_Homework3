@@ -82,48 +82,56 @@ class TokenizedDataset:
         return tokenize(self.tokenizer, **formated_data)
 
 
-def train_model(
-    output_dir: str,
-    **kwargs,
-):
-#     raise NotImplementedError()
-        output = Path(output_dir)
-        output.mkdir(parents=True, exist_ok=True)
+def train_model(output_dir: str = "homework/sft_model", **kwargs):
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
 
-        # 1. model + LoRA
-        llm = _create_lora_model()
+    # 1) load base model
+    llm = BaseLLM()
 
-        # 2. dataset (tokenised on‑the‑fly)
-        train_data = TokenizedDataset(llm.tokenizer, Dataset("train"), format_example)
+    # 2) attach LoRA adapter
+    lora_cfg = LoraConfig(
+        r=4,
+        lora_alpha=16,
+        target_modules="all-linear",
+        bias="none",
+        task_type=TaskType.CAUSAL_LM,
+    )
+    llm.model = get_peft_model(llm.model, lora_cfg)
 
-        # 3. trainer args – super tiny to keep runtime minimal
-        args = TrainingArguments(
-            output_dir=str(output),
-            per_device_train_batch_size=32,
-            num_train_epochs=1,
-            learning_rate=5e-4,
-            logging_dir=str(output / "logs"),
-            report_to="none",
-            gradient_checkpointing=True,
-            save_total_limit=1,
-        )
+    # 3) prepare dataset
+    train_ds = TokenizedDataset(llm.tokenizer, Dataset("train"), format_example)
 
-        trainer = Trainer(model=llm.model, args=args, train_dataset=train_data)
-        trainer.train()
+    # 4) training args (very small for fast completion)
+    args = TrainingArguments(
+        output_dir=str(output_path),
+        logging_dir=str(output_path / "logs"),
+        num_train_epochs=1,
+        per_device_train_batch_size=8,
+        learning_rate=2e-4,
+        gradient_checkpointing=True,
+        report_to="none",
+        fp16=False,
+    )
 
-        # Save adapter in *output_dir* and in fixed path for the grader
-        trainer.save_model(str(output))
+    trainer = Trainer(model=llm.model, args=args, train_dataset=train_ds)
 
-        default_path = Path(__file__).parent / "sft_model"
-        default_path.mkdir(parents=True, exist_ok=True)
-        trainer.save_model(str(default_path))
+    print("Starting SFT training (tiny epoch)…")
+    trainer.train()
 
-        # Quick self‑check (prints accuracy but does not gate execution)
-        print("Running quick validation after SFT …")
-        val = benchmark(llm, Dataset("valid"), 100)
-        print(f"accuracy={val.accuracy:.3f}  answer_rate={val.answer_rate:.3f}")
+    # 5) save adapter
+    trainer.save_model(str(output_path))
 
-        test_model(output_dir)
+    # also copy to canonical folder if different
+    canonical = Path(__file__).parent / "sft_model"
+    if canonical.resolve() != output_path.resolve():
+        canonical.mkdir(exist_ok=True, parents=True)
+        copytree(output_path, canonical, dirs_exist_ok=True)
+
+    # quick sanity benchmark
+    val_acc = benchmark(llm, Dataset("valid"), 50).accuracy
+    print(f"Validation accuracy after SFT: {val_acc:.3f}")
+
 
 
 def test_model(ckpt_path: str):
