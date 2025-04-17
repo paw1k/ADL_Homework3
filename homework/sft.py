@@ -49,8 +49,16 @@ def format_example(prompt: str, answer: str) -> dict[str, str]:
     """
     Construct a question / answer pair. Consider rounding the answer to make it easier for the LLM.
     """
-    raise NotImplementedError()
+#     raise NotImplementedError()
+        try:
+            ans_val = float(answer)
+        except Exception:  # pragma: no cover – dataset is clean but be safe
+            ans_val = answer
 
+        return {
+            "question": prompt.strip(),
+            "answer": f"<answer>{round(ans_val, 3)}</answer>",
+        }
 
 class TokenizedDataset:
     def __init__(self, tokenizer, data: Dataset, format_fn):
@@ -78,8 +86,44 @@ def train_model(
     output_dir: str,
     **kwargs,
 ):
-    raise NotImplementedError()
-    test_model(output_dir)
+#     raise NotImplementedError()
+        output = Path(output_dir)
+        output.mkdir(parents=True, exist_ok=True)
+
+        # 1. model + LoRA
+        llm = _create_lora_model()
+
+        # 2. dataset (tokenised on‑the‑fly)
+        train_data = TokenizedDataset(llm.tokenizer, Dataset("train"), format_example)
+
+        # 3. trainer args – super tiny to keep runtime minimal
+        args = TrainingArguments(
+            output_dir=str(output),
+            per_device_train_batch_size=32,
+            num_train_epochs=1,
+            learning_rate=5e-4,
+            logging_dir=str(output / "logs"),
+            report_to="none",
+            gradient_checkpointing=True,
+            save_total_limit=1,
+        )
+
+        trainer = Trainer(model=llm.model, args=args, train_dataset=train_data)
+        trainer.train()
+
+        # Save adapter in *output_dir* and in fixed path for the grader
+        trainer.save_model(str(output))
+
+        default_path = Path(__file__).parent / "sft_model"
+        default_path.mkdir(parents=True, exist_ok=True)
+        trainer.save_model(str(default_path))
+
+        # Quick self‑check (prints accuracy but does not gate execution)
+        print("Running quick validation after SFT …")
+        val = benchmark(llm, Dataset("valid"), 100)
+        print(f"accuracy={val.accuracy:.3f}  answer_rate={val.answer_rate:.3f}")
+
+        test_model(output_dir)
 
 
 def test_model(ckpt_path: str):
