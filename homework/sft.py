@@ -1,86 +1,63 @@
+from pathlib import Path
+from shutil import copytree
+from typing import Dict
+
+import torch
+from transformers import Trainer, TrainingArguments
+from peft import LoraConfig, get_peft_model, TaskType
+
 from .base_llm import BaseLLM
 from .data import Dataset, benchmark
 
+# ---------------------------------------------------------------------------
+# Helper: prepare plain Q/A text – no chat template for SFT
+# ---------------------------------------------------------------------------
 
-def load() -> BaseLLM:
-    from pathlib import Path
+def format_example(prompt: str, answer: float) -> Dict[str, str]:
+    rounded = round(float(answer), 4)
+    return {
+        "question": prompt,
+        "answer": f"<answer>{rounded}</answer>",
+    }
 
-    from peft import PeftModel
 
-    model_name = "sft_model"
-    model_path = Path(__file__).parent / model_name
-
-    llm = BaseLLM()
-    llm.model = PeftModel.from_pretrained(llm.model, model_path).to(llm.device)
-    llm.model.eval()
-
-    return llm
-
+# ---------------------------------------------------------------------------
+# Tokenisation utilities re‑used by RFT
+# ---------------------------------------------------------------------------
 
 def tokenize(tokenizer, question: str, answer: str):
-    """
-    Tokenize a data element.
-    We first append the <EOS> token to the question / answer pair.
-    Then we tokenize and construct the ground truth `labels`.
-    `labels[i] == -100` for the question or masked out parts, since we only want to supervise
-    the answer.
-    """
     full_text = f"{question} {answer}{tokenizer.eos_token}"
-
     tokenizer.padding_side = "right"
     tokenizer.pad_token = tokenizer.eos_token
-    full = tokenizer(full_text, padding="max_length", truncation=True, max_length=128)
+    enc = tokenizer(full_text, padding="max_length", truncation=True, max_length=128)
 
-    input_ids = full["input_ids"]
-    question_len = len(tokenizer(question)["input_ids"])
+    # mask out the prompt tokens in labels
+    q_len = len(tokenizer(question)["input_ids"])
+    labels = [-100] * q_len + enc["input_ids"][q_len:]
+    # also mask any padded positions
+    labels = [lab if mask == 1 else -100 for lab, mask in zip(labels, enc["attention_mask"])]
+    enc["labels"] = labels
+    return enc
 
-    # Create labels: mask out the prompt part
-    labels = [-100] * question_len + input_ids[question_len:]
-
-    for i in range(len(labels)):
-        if full["attention_mask"][i] == 0:
-            labels[i] = -100
-
-    full["labels"] = labels
-    return full
-
-
-def format_example(prompt: str, answer: str) -> dict[str, str]:
-    """
-    Construct a question / answer pair. Consider rounding the answer to make it easier for the LLM.
-    """
-#     raise NotImplementedError()
-        try:
-            ans_val = float(answer)
-        except Exception:  # pragma: no cover – dataset is clean but be safe
-            ans_val = answer
-
-        return {
-            "question": prompt.strip(),
-            "answer": f"<answer>{round(ans_val, 3)}</answer>",
-        }
 
 class TokenizedDataset:
-    def __init__(self, tokenizer, data: Dataset, format_fn):
-        """
-        Use the
-        - BaseLLM.tokenizer
-        - Dataset
-        - format_fn which converts a data element into a dict with entries
-          - question: str
-          - answer: str
-        """
-        self.format_fn = format_fn
+    def __init__(self, tokenizer, data: Dataset, fmt_fn):
         self.tokenizer = tokenizer
         self.data = data
+        self.fmt_fn = fmt_fn
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        formated_data = self.format_fn(*self.data[idx])
-        return tokenize(self.tokenizer, **formated_data)
+        q, a = self.data[idx]
+        item = self.fmt_fn(q, a)
+        return tokenize(self.tokenizer, **item)
 
+
+# ---------------------------------------------------------------------------
+# Training entry‑point
+# ---------------------------------------------------------------------------
 
 def train_model(output_dir: str = "homework/sft_model", **kwargs):
     output_path = Path(output_dir)
@@ -133,21 +110,22 @@ def train_model(output_dir: str = "homework/sft_model", **kwargs):
     print(f"Validation accuracy after SFT: {val_acc:.3f}")
 
 
+# ---------------------------------------------------------------------------
+# Loader expected by the grader
+# ---------------------------------------------------------------------------
 
-def test_model(ckpt_path: str):
-    testset = Dataset("valid")
-    llm = BaseLLM()
-
-    # Load the model with LoRA adapters
+def load() -> BaseLLM:  # noqa: D401
     from peft import PeftModel
 
-    llm.model = PeftModel.from_pretrained(llm.model, ckpt_path).to(llm.device)
+    path = Path(__file__).parent / "sft_model"
+    llm = BaseLLM()
+    llm.model = PeftModel.from_pretrained(llm.model, path).to(llm.device)
+    llm.model.eval()
+    return llm
 
-    benchmark_result = benchmark(llm, testset, 100)
-    print(f"{benchmark_result.accuracy=}  {benchmark_result.answer_rate=}")
 
-
+# quick CLI helpers
 if __name__ == "__main__":
     from fire import Fire
 
-    Fire({"train": train_model, "test": test_model, "load": load})
+    Fire({"train": train_model, "load": load})
