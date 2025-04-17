@@ -67,7 +67,7 @@ class BaseLLM:
         prompts: list[str],
         num_return_sequences: int | None = None,
         temperature: float = 0.0,
-    ) -> Union[list[str], list[list[str]]]:
+    ) -> list[str] | list[list[str]]:
         """Efficiently decode *all* prompts in one forward‑pass.
 
         The implementation follows the hints in the README: left‑pad prompts to
