@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import list
 
 from .cot import CoTModel
 from .data import Dataset, is_answer_valid
@@ -40,7 +40,7 @@ def generate_dataset(output_json: str, oversample: int = 10, temperature: float 
         # -------------------------------------------------------------------
         # Iterate over the *training* split
         # -------------------------------------------------------------------
-        rollouts: List[list] = []
+        rollouts: list[list] = []
         train = Dataset("train")
 
         for q, true_answer in train:

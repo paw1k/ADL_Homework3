@@ -64,10 +64,10 @@ class BaseLLM:
 
     def batched_generate(
         self,
-        prompts: List[str],
+        prompts: list[str],
         num_return_sequences: int | None = None,
         temperature: float = 0.0,
-    ) -> Union[List[str], List[List[str]]]:
+    ) -> Union[list[str], list[list[str]]]:
         """Efficiently decode *all* prompts in one forward‑pass.
 
         The implementation follows the hints in the README: left‑pad prompts to
@@ -113,13 +113,13 @@ class BaseLLM:
                 eos_token_id=self.tokenizer.eos_token_id,
             )
 
-        decoded: List[str] = self.tokenizer.batch_decode(out, skip_special_tokens=True)
+        decoded: list[str] = self.tokenizer.batch_decode(out, skip_special_tokens=True)
 
         if n_return == 1:
             return decoded  # type: ignore[return-value]
 
         # regroup flat list -> List[List[str]] (one sub‑list per original prompt)
-        grouped: List[List[str]] = [
+        grouped: list[list[str]] = [
             decoded[i * n_return : (i + 1) * n_return] for i in range(len(prompts))
         ]
 
