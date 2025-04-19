@@ -2,26 +2,22 @@ from .base_llm import BaseLLM
 
 
 class CoTModel(BaseLLM):
-    def format_prompt(self, question: str) -> str:  # noqa: D401 – public API
-        """Return a chat‑style prompt following SmolLM2’s template."""
+    def format_prompt(self, question: str) -> str:
+        """
+        Take a question and convert it into a chat template. The LLM will likely answer much
+        better if you provide a chat template. self.tokenizer.apply_chat_template can help here
+        """
+        example_q = "Convert 2 kg to g."
+        example_a = "2 kg = 2000 g. <answer>2000</answer>"
+
         messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You are an expert unit‑conversion assistant. "
-                    "Show concise working and wrap the final numeric value in "
-                    "<answer> tags."
-                ),
-            },
-            {"role": "user", "content": self._EXAMPLE_Q},
-            {"role": "assistant", "content": self._EXAMPLE_A},
-            {"role": "user", "content": question},
+            {"role": "system", "content": "You are a unit conversion assistant. Wrap the final answer in <answer> tags."},
+            {"role": "user", "content": example_q},
+            {"role": "assistant", "content": example_a},
+            {"role": "user", "content": question}
         ]
 
-        # Convert chat list → single string (don’t tokenize here)
-        return self.tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, tokenize=False
-        )
+        return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
 #         raise NotImplementedError()
 
