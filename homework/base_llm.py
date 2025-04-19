@@ -109,13 +109,15 @@ class BaseLLM:
                 eos_token_id=self.tokenizer.eos_token_id,
             )
 
-        # ------------------ slice away the prompt portion ---------------- #
+                # ------------------ slice away the prompt portion ---------------- #
+        attn = tok_batch["attention_mask"]  # (batch, seq_len)
+        seq_len = attn.shape[1]
+        starts = attn.sum(dim=1).tolist()  # prompt length for each item (left‑padding‑aware)
+
         decoded: list[str] = []
-        prompt_lens = tok_batch["input_ids"].shape[1]
-        # Since we left‑padded, *all* prompt lengths equal prompt_lens.
-        for seq in gen_ids:
-            new_tokens = seq[prompt_lens:]
-            decoded.append(self.tokenizer.decode(new_tokens, skip_special_tokens=True))
+        for i, seq in enumerate(gen_ids):
+            new_tok = seq[starts[i] :]
+            decoded.append(self.tokenizer.decode(new_tok, skip_special_tokens=True))
 
         # ---- reshape if caller asked for multiple return sequences ------ #
         if n_return == 1:
