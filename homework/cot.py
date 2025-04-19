@@ -2,22 +2,37 @@ from .base_llm import BaseLLM
 
 
 class CoTModel(BaseLLM):
-    def format_prompt(self, question: str) -> str:
+        def format_prompt(self, question: str) -> str:
         """
-        Take a question and convert it into a chat template. The LLM will likely answer much
-        better if you provide a chat template. self.tokenizer.apply_chat_template can help here
+        Build a chat prompt that encourages step‑by‑step reasoning **and**
+        forces the model to wrap the final number in <answer> tags.
         """
-        example_q = "Convert 2 kg to g."
-        example_a = "2 kg = 2000 g. <answer>2000</answer>"
 
+        # 1️⃣ One worked example – short, explicit, shows the tag early
+        ex_q = "How many gram are there per 3 kg?"
+        ex_a = (
+            "1 kg = 1000 g → 3 kg × 1000 g/kg = <answer>3000</answer> g."
+            " The final answer is 3000 grams."
+        )
+
+        # 2️⃣ Put everything into SmolLM2’s chat‑template
         messages = [
-            {"role": "system", "content": "You are a unit conversion assistant. Wrap the final answer in <answer> tags."},
-            {"role": "user", "content": example_q},
-            {"role": "assistant", "content": example_a},
-            {"role": "user", "content": question}
+            {
+                "role": "system",
+                "content": (
+                    "You are an expert **unit‑conversion assistant**. "
+                    "Think step‑by‑step but *be concise*. "
+                    "ALWAYS finish with the result wrapped in <answer> tags."
+                ),
+            },
+            {"role": "user", "content": ex_q},
+            {"role": "assistant", "content": ex_a},
+            {"role": "user", "content": question},
         ]
 
-        return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        return self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
 
 #         raise NotImplementedError()
 
