@@ -91,38 +91,39 @@ class BaseLLM:
                 )
             ]
 
-        # ------------------------------------------------------------------ #
-        # ready to process *this* batch
-        # ------------------------------------------------------------------ #
-        n_return = num_return_sequences or 1
-        do_sample = temperature > 0.0
-
+        # ------------------- tokenizer & generation params --------------- #
         self.tokenizer.padding_side = "left"
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        tok = self.tokenizer(prompts, padding=True, return_tensors="pt").to(self.device)
+        tok_batch = self.tokenizer(prompts, padding=True, return_tensors="pt").to(self.device)
+        n_return = num_return_sequences or 1
+        do_sample = temperature > 0.0
 
         with torch.no_grad():
-            out = self.model.generate(
-                input_ids=tok["input_ids"],
-                attention_mask=tok["attention_mask"],
-                max_new_tokens=32,
+            gen_ids = self.model.generate(
+                **tok_batch,
+                max_new_tokens=48,
                 do_sample=do_sample,
                 temperature=temperature if do_sample else None,
                 num_return_sequences=n_return,
                 eos_token_id=self.tokenizer.eos_token_id,
             )
 
-        decoded: list[str] = self.tokenizer.batch_decode(out, skip_special_tokens=True)
+        # ------------------ slice away the prompt portion ---------------- #
+        decoded: list[str] = []
+        prompt_lens = tok_batch["input_ids"].shape[1]
+        # Since we left‑padded, *all* prompt lengths equal prompt_lens.
+        for seq in gen_ids:
+            new_tokens = seq[prompt_lens:]
+            decoded.append(self.tokenizer.decode(new_tokens, skip_special_tokens=True))
 
+        # ---- reshape if caller asked for multiple return sequences ------ #
         if n_return == 1:
             return decoded  # type: ignore[return-value]
 
-        # regroup flat list -> List[List[str]] (one sub‑list per original prompt)
         grouped: list[list[str]] = [
             decoded[i * n_return : (i + 1) * n_return] for i in range(len(prompts))
         ]
-
         return grouped
 
 #         raise NotImplementedError()
