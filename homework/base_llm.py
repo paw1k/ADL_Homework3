@@ -102,7 +102,7 @@ class BaseLLM:
         with torch.no_grad():
             gen_ids = self.model.generate(
                 **tok_batch,
-                max_new_tokens=48,
+                max_new_tokens=64,
                 do_sample=do_sample,
                 temperature=temperature if do_sample else None,
                 num_return_sequences=n_return,

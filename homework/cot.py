@@ -8,19 +8,15 @@ class CoTModel(BaseLLM):
     _EXAMPLES = [
         (
             "How many gram are there per 3 kg?",
-            "<answer>3000</answer> Because 1 kg = 1000 g, so 3 kg × 1000 g/kg = 3000 g.",
+            "1 kg = 1000 g\n3 kg × 1000 g/kg = 3000 g\n<answer>3000</answer>",
         ),
         (
-            "Convert 2 hours to seconds.",
-            "<answer>7200</answer> Because 1 h = 3600 s, so 2 h × 3600 s/h = 7200 s.",
+            "Convert 5 mile to meter.",
+            "1 mile = 1609.344 m\n5 mile × 1609.344 m/mile = 8046.72 m\n<answer>8046.72</answer>",
         ),
         (
             "Convert 8 km/h to m/s.",
-            "<answer>2.2222222222222223</answer> Because 1 km = 1000 m and 1 h = 3600 s, so 8 ×1000/3600 ≈ 2.2222 m/s.",
-        ),
-        (
-            "How many pounds are there in 5 kg?",
-            "<answer>11.023113109</answer> Because 1 kg = 2.2046226218487757 lb, so 5 × 2.2046226218487757 = 11.023113109 lb.",
+            "1 km = 1000 m, 1 h = 3600 s\n(8 × 1000) / 3600 = 2.222222… m/s\n<answer>2.2222222222222223</answer>",
         ),
     ]
 
@@ -36,9 +32,9 @@ class CoTModel(BaseLLM):
 
         # System instruction – short & strict
         sys_msg = (
-            "You are an expert unit‑conversion assistant. "
-            "Start your reply with the numeric result wrapped exactly as <answer>NUMBER</answer>. "
-            "Then give one concise sentence showing the calculation."
+            "You are a unit‑conversion expert. "
+            "First think step‑by‑step and write the calculation, "
+            "then on a new line output the result as <answer>NUMBER</answer>."
         )
 
         messages: list[dict[str, str]] = [{"role": "system", "content": sys_msg}]
