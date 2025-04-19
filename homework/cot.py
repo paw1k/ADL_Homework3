@@ -41,7 +41,7 @@ class CoTModel(BaseLLM):
             "Then give one concise sentence showing the calculation."
         )
 
-        messages: list[dict[str, str]] = [{"role": "system", "content": sys_msg}]: list[dict[str, str]] = [{"role": "system", "content": sys_msg}]
+        messages: list[dict[str, str]] = [{"role": "system", "content": sys_msg}]
 
         # Add our worked examples
         for q, a in self._EXAMPLES:
