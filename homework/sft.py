@@ -1,6 +1,6 @@
 from .base_llm import BaseLLM
 from .data import Dataset, benchmark
-
+from typing import Dict
 
 def load() -> BaseLLM:
     from pathlib import Path
