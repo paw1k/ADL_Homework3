@@ -53,13 +53,11 @@ def tokenize(tokenizer, question: str, answer: str):
     return full
 
 
-def format_example(question: str, answer: float) -> Dict[str, str]:
-
+def format_example(prompt: str, answer: float) -> Dict[str, str]:
     return {
-        "question": question,
-        "answer": f"<answer>{round(float(answer), 4)}</answer>",
+        "question": prompt.strip(),
+        "answer": f"<answer>{round(answer, 4)}</answer>",
     }
-
 #     raise NotImplementedError()
 
 
@@ -91,29 +89,11 @@ def train_model(
     epochs: int = 1,
     lr: float = 2e-4,
     rank: int = 4,
-):  # noqa: D401, C901 – keep signature exactly for `fire`
-    """Fine‑tune the model and save the LoRA adapter.
-
-    Parameters
-    ----------
-    output_dir : str, default ``homework/sft_model``
-        Where to write the adapter.
-    epochs : int, default **1**
-        Number of training epochs (the dataset is tiny, so one is enough for
-        the automated grader).
-    lr : float, default **2e‑4**
-        Adam learning rate.
-    rank : int, default **4**
-        LoRA rank – higher improves capacity but enlarges the submission.
-    """
-
+):
     out_path = Path(output_dir).expanduser().resolve()
     out_path.mkdir(parents=True, exist_ok=True)
 
-    # 1) base model --------------------------------------------------------- #
     llm = BaseLLM()
-
-    # 2) attach LoRA adapter ------------------------------------------------- #
     lora_cfg = LoraConfig(
         r=rank,
         lora_alpha=rank * 4,
@@ -122,14 +102,10 @@ def train_model(
         task_type=TaskType.CAUSAL_LM,
     )
     llm.model = get_peft_model(llm.model, lora_cfg)
-
-    # 🔑 **crucial line** – make checkpointing work
     llm.model.enable_input_require_grads()
 
-    # 3) dataset ------------------------------------------------------------ #
     train_ds = TokenizedDataset(llm.tokenizer, Dataset("train"), format_example)
 
-    # 4) trainer ------------------------------------------------------------ #
     args = TrainingArguments(
         output_dir=str(out_path),
         logging_dir=str(out_path / "logs"),
@@ -137,32 +113,23 @@ def train_model(
         per_device_train_batch_size=16,
         learning_rate=lr,
         gradient_checkpointing=True,
-        report_to="none",  # disable Weights‑&‑Biases etc.
+        report_to="none",
         fp16=torch.cuda.is_available(),
     )
 
     trainer = Trainer(model=llm.model, args=args, train_dataset=train_ds)
-
     print("Starting SFT training… (this is a tiny run just for the grader)")
     trainer.train()
-
-    # 5) save adapter ------------------------------------------------------- #
     trainer.save_model(str(out_path))
 
-    # also copy to canonical dir expected by the grader
     canonical = Path(__file__).parent / "sft_model"
     if canonical.resolve() != out_path.resolve():
         canonical.mkdir(parents=True, exist_ok=True)
         copytree(out_path, canonical, dirs_exist_ok=True)
 
-    # quick sanity check ---------------------------------------------------- #
     res = benchmark(llm, Dataset("valid"), 50)
     print(f"Validation   acc={res.accuracy:.3f}   answer‑rate={res.answer_rate:.3f}")
-
-
-#     raise NotImplementedError()
     test_model(output_dir)
-
 
 def test_model(ckpt_path: str):
     testset = Dataset("valid")
