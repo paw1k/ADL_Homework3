@@ -31,7 +31,7 @@ def tokenize(tokenizer, question: str, answer: str):
 
     tokenizer.padding_side = "right"
     tokenizer.pad_token = tokenizer.eos_token
-    full = tokenizer(full_text, padding="max_length", truncation=True, max_length=128)
+    full = tokenizer(full_text, padding="max_length", truncation=True, max_length=256)
 
     input_ids = full["input_ids"]
     q_len = len(tokenizer(question)["input_ids"])
@@ -47,11 +47,11 @@ def tokenize(tokenizer, question: str, answer: str):
 
 
 def format_example(question: str, answer: float) -> Dict[str, str]:
-    """Round *answer* and wrap it in `<answer>` tags for training."""
     return {
         "question": question.strip(),
-        "answer": f"<answer>{round(answer, 4)}</answer>",
+        "answer": f"The answer is <answer>{round(answer, 4)}</answer>",
     }
+
 
 
 class TokenizedDataset:
@@ -73,7 +73,7 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 1,
+    epochs: int = 3,
     lr: float = 2e-4,
     rank: int = 4,
 ):
@@ -91,8 +91,8 @@ def train_model(
 
     # 2) add LoRA adapter -------------------------------------------------- #
     lora_cfg = LoraConfig(
-        r=rank,
-        lora_alpha=rank * 4,
+        r=8,
+        lora_alpha=32,
         target_modules="all-linear",
         bias="none",
         task_type=TaskType.CAUSAL_LM,
@@ -110,6 +110,8 @@ def train_model(
         num_train_epochs=epochs,
         per_device_train_batch_size=16,
         learning_rate=lr,
+        warmup_steps=20,
+        weight_decay=0.01,
         gradient_checkpointing=True,
         report_to="none",
         fp16=torch.cuda.is_available(),

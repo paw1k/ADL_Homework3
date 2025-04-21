@@ -25,9 +25,14 @@ def generate_dataset(
     train = Dataset("train")
 
     for q, true_answer in train:
-        generations = cot_model.batched_generate(
+        generations_batch = cot_model.batched_generate(
             [cot_model.format_prompt(q)], num_return_sequences=oversample, temperature=temperature
-        )[0]
+        )
+
+        if not generations_batch or not generations_batch[0]:
+            continue  # skip this example if no valid generations
+
+        generations = generations_batch[0]
 
         picked: Optional[str] = None
         for g in generations:
