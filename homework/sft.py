@@ -64,8 +64,8 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 3,
-    lr: float = 2e-4,
+    epochs: int = 5,
+    lr: float = 2e-3,
     rank: int = 4,
 ):
     """Fine‑tune SmolLM2 on the supervised *train* split and save a LoRA adapter.
