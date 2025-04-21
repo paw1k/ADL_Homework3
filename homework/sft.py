@@ -20,26 +20,17 @@ def load() -> BaseLLM:
 
 
 def tokenize(tokenizer, question: str, answer: str):
-    """Tokenize question‑answer pair and build training labels.
-
-    The *answer* string already contains the `<answer>..</answer>` tag.  We let
-    the model see the **question** tokens as context but mask them out in the
-    `labels` tensor (‑100) so that the loss is only computed on the answer
-    portion.
-    """
     full_text = f"{question} {answer}{tokenizer.eos_token}"
-
     tokenizer.padding_side = "right"
     tokenizer.pad_token = tokenizer.eos_token
-    full = tokenizer(full_text, padding="max_length", truncation=True, max_length=256)
+    full = tokenizer(full_text, padding="max_length", truncation=True, max_length=512)
 
     input_ids = full["input_ids"]
     q_len = len(tokenizer(question)["input_ids"])
-
     labels = [-100] * q_len + input_ids[q_len:]
-    # mask any padded positions as well
-    for i, mask in enumerate(full["attention_mask"]):
-        if mask == 0:
+
+    for i, m in enumerate(full["attention_mask"]):
+        if m == 0:
             labels[i] = -100
 
     full["labels"] = labels
