@@ -61,8 +61,8 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 10,
-    lr: float = 1e-3,
+    epochs: int = 5,
+    lr: float = 1e-5,
     rank: int = 8,
 ):
     """Fine-tune SmolLM2 using LoRA for direct answer generation."""
