@@ -99,7 +99,7 @@ def train_model(
         output_dir=str(out_path),
         logging_dir=str(out_path / "logs"),
         num_train_epochs=epochs,
-        per_device_train_batch_size=32,
+        per_device_train_batch_size=16,
         learning_rate=lr,
         warmup_steps=20,
         weight_decay=0.01,
