@@ -24,25 +24,20 @@ def format_example(prompt: str, answer: str) -> dict[str, str]:
     }
 
 def tokenize(tokenizer, question: str, answer: str):
-    """Tokenize the input/output pair and mask the input when computing loss."""
     full_text = f"{question} {answer}{tokenizer.eos_token}"
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
-
-    # Tokenize without special tokens to make sure <answer> appears as-is
-    full = tokenizer(full_text, padding="max_length", truncation=True,
-                     max_length=128, add_special_tokens=False)
+    full = tokenizer(full_text, padding="max_length", truncation=True, max_length=128)
 
     input_ids = full["input_ids"]
-    question_ids = tokenizer(question, add_special_tokens=False)["input_ids"]
+    q_ids = tokenizer(question, truncation=True, max_length=128)["input_ids"]
+    q_len = len(q_ids)
 
-    # Locate start of <answer>
-    label_start = len(question_ids)
-    labels = [-100] * label_start + input_ids[label_start:]
+    labels = [-100] * q_len + input_ids[q_len:]
+    labels = labels[:128] + [-100] * max(0, 128 - len(labels))  # pad/truncate to match
 
-    # Mask out padded tokens as well
-    for i, attn in enumerate(full["attention_mask"]):
-        if attn == 0:
+    for i, a in enumerate(full["attention_mask"]):
+        if a == 0:
             labels[i] = -100
 
     full["labels"] = labels
