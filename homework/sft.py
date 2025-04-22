@@ -62,7 +62,7 @@ def train_model(
     output_dir: str = "homework/sft_model",
     *,
     epochs: int = 5,
-    lr: float = 5e-4,
+    lr: float = 2e-4,
     rank: int = 8,
 ):
     """Fine-tune SmolLM2 using LoRA for direct answer generation."""
@@ -89,7 +89,7 @@ def train_model(
         output_dir=str(out_path),
         logging_dir=str(out_path / "logs"),
         num_train_epochs=epochs,
-        per_device_train_batch_size=16,
+        per_device_train_batch_size=32,
         learning_rate=lr,
         gradient_checkpointing=True,
         report_to="tensorboard",
