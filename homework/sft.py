@@ -110,10 +110,10 @@ def train_model(
 
     trainer = Trainer(model=llm.model, args=args, train_dataset=train_ds)
     print("Starting SFT training … (quick run for grader)")
-    Trainer.train()
+    trainer.train()
 
     # 5) save adapter ------------------------------------------------------ #
-    Trainer.save_model(str(out_path))
+    trainer.save_model(str(out_path))
 
     # also copy to canonical path expected by the grader
     canonical = Path(__file__).parent / "sft_model"
