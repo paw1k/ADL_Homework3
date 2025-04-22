@@ -13,8 +13,7 @@ class BaseLLM:
         self.device = device
 
     def format_prompt(self, question: str) -> str:
-        # This format must match exactly what was used during training (SFT)
-        return question.strip()
+        return f"{question} Answer:"
 
     def parse_answer(self, answer: str) -> float:
         try:

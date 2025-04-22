@@ -20,27 +20,30 @@ def load() -> BaseLLM:
 
 
 def tokenize(tokenizer, question: str, answer: str):
-    full_text = f"{question} {answer}{tokenizer.eos_token}"
+    full_prompt = f"{question} Answer: {answer}{tokenizer.eos_token}"
+
     tokenizer.padding_side = "right"
     tokenizer.pad_token = tokenizer.eos_token
-    full = tokenizer(full_text, padding="max_length", truncation=True, max_length=512)
 
+    full = tokenizer(full_prompt, padding="max_length", truncation=True, max_length=64)
     input_ids = full["input_ids"]
-    q_len = len(tokenizer(question)["input_ids"])
-    labels = [-100] * q_len + input_ids[q_len:]
+    attention_mask = full["attention_mask"]
 
-    for i, m in enumerate(full["attention_mask"]):
-        if m == 0:
-            labels[i] = -100
+    # mask everything before the answer
+    split = tokenizer(f"{question} Answer: ", add_special_tokens=False)["input_ids"]
+    label_start = len(split)
+
+    labels = [-100] * label_start + input_ids[label_start:]
+    labels = [l if m == 1 else -100 for l, m in zip(labels, attention_mask)]
 
     full["labels"] = labels
     return full
 
 
-def format_example(question: str, answer: float) -> Dict[str, str]:
+def format_example(question: str, answer: float) -> dict[str, str]:
     return {
-        "question": question.strip(),
-        "answer": f"The answer is <answer>{round(answer, 4)}</answer>",
+        "question": question,
+        "answer": f"<answer>{round(answer, 4)}</answer>"
     }
 
 
@@ -64,8 +67,8 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 3,
-    lr: float = 2e-3,
+    epochs: int = 5,
+    lr: float = 1e-4,
     rank: int = 4,
 ):
     """Fine‑tune SmolLM2 on the supervised *train* split and save a LoRA adapter.
@@ -99,7 +102,7 @@ def train_model(
         output_dir=str(out_path),
         logging_dir=str(out_path / "logs"),
         num_train_epochs=epochs,
-        per_device_train_batch_size=16,
+        per_device_train_batch_size=32,
         learning_rate=lr,
         warmup_steps=20,
         weight_decay=0.01,
