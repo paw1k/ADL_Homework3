@@ -61,7 +61,7 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 15,
+    epochs: int = 7,
     lr: float = 1e-3,
     rank: int = 8,
 ):
