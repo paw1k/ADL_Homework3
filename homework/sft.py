@@ -20,8 +20,8 @@ def load() -> BaseLLM:
 
 
 def tokenize(tokenizer, question: str, answer: str):
-    # Force simple format: Question<answer>X.Y</answer>
-    full_text = f"{question}<answer>{answer}</answer>{tokenizer.eos_token}"
+    """🔥 Simplified prompt format with direct answer tagging"""
+    full_text = f"{question}<answer>{answer:.6f}</answer>{tokenizer.eos_token}"
 
     tokenizer.padding_side = "right"
     tokenizer.pad_token = tokenizer.eos_token
@@ -31,26 +31,15 @@ def tokenize(tokenizer, question: str, answer: str):
                         max_length=256,
                         return_tensors="pt")
 
-    # Find answer position
-    answer_tokens = tokenizer.encode("<answer>")[0]
-    input_ids = encoding.input_ids[0]
-
-    try:
-        answer_start = (input_ids == answer_tokens).nonzero()[0].item()
-    except IndexError:
-        answer_start = len(input_ids) - 1  # Fallback
-
-    # Create labels (-100 before answer)
-    labels = [-100] * answer_start + input_ids[answer_start:].tolist()
+    # 🔥 Exact answer position detection using token IDs
+    answer_start = encoding.input_ids[0].tolist().index(tokenizer.convert_tokens_to_ids("<answer>"))
+    labels = [-100] * answer_start + encoding.input_ids[0].tolist()[answer_start:]
     encoding["labels"] = torch.tensor(labels)
     return encoding
 
 def format_example(prompt: str, answer: str) -> dict[str, str]:
-    # Round to 6 decimals to match validation tolerance
-    return {
-        "question": prompt,
-        "answer": f"{round(answer, 6):.6f}"  # Force 6 decimal format
-    }
+    """🔥 Strict 6-decimal formatting to match validation"""
+    return {"question": prompt, "answer": f"{answer:.6f}"}
 
 
 class TokenizedDataset:
@@ -80,9 +69,9 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 7,  # Increased from 5
-    lr: float = 1e-4,  # Reduced learning rate
-    rank: int = 16,  # Increased rank
+    epochs: int = 5,  # Strictly ≤5 as per spec
+    lr: float = 3e-4,  # Optimal for numerical tasks
+    rank: int = 12,    # Max rank for 20MB limit
 ):
     """Fine‑tune SmolLM2 on the supervised *train* split and save a LoRA adapter.
 
@@ -99,11 +88,10 @@ def train_model(
     # 2) add LoRA adapter -------------------------------------------------- #
     lora_cfg = LoraConfig(
         r=rank,
-        lora_alpha=rank*4,  # 64
-        target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
+        lora_alpha=rank*5,  # 60 (5× rank=12)
+        target_modules="all-linear",
         bias="none",
         task_type=TaskType.CAUSAL_LM,
-        modules_to_save=["lm_head"],
     )
     llm.model = get_peft_model(llm.model, lora_cfg)
     llm.model.enable_input_require_grads()  # needed together w/ gradient ckpt.
@@ -114,19 +102,23 @@ def train_model(
     # 4) trainer ----------------------------------------------------------- #
     # Optimized training arguments
     args = TrainingArguments(
-        output_dir=str(out_path),
-        per_device_train_batch_size=16,  # Reduced batch size
-        gradient_accumulation_steps=4,
-        learning_rate=lr,
-        num_train_epochs=epochs,
-        warmup_ratio=0.1,
-        logging_steps=10,
-        fp16=False,  # Disable FP16 for stability
+        output_dir=output_dir,
+        logging_dir=output_dir,
+        report_to="tensorboard",
+        per_device_train_batch_size=32,
         gradient_checkpointing=True,
-        optim="adafactor",  # More stable than adamw
+        num_train_epochs=epochs,
+        learning_rate=lr,
+        fp16=True,
+        save_strategy="no",
     )
 
-    trainer = Trainer(model=llm.model, args=args, train_dataset=train_ds)
+    trainer = Trainer(
+        model=get_peft_model(BaseLLM().model, lora_cfg).enable_input_require_grads(),
+        args=args,
+        train_dataset=TokenizedDataset(BaseLLM().tokenizer, Dataset("train"), format_example)
+    )
+
     print("Starting SFT training … (quick run for grader)")
     trainer.train()
 
