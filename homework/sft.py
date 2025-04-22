@@ -20,26 +20,34 @@ def load() -> BaseLLM:
 
 
 def tokenize(tokenizer, question: str, answer: str):
-    """🔥 Simplified prompt format with direct answer tagging"""
-    full_text = f"{question}<answer>{answer:.6f}</answer>{tokenizer.eos_token}"
+    """
+    Tokenize a data element.
+    We first append the <EOS> token to the question / answer pair.
+    Then we tokenize and construct the ground truth `labels`.
+    `labels[i] == -100` for the question or masked out parts, since we only want to supervise
+    the answer.
+    """
+    full_text = f"{question} {answer}{tokenizer.eos_token}"
 
     tokenizer.padding_side = "right"
     tokenizer.pad_token = tokenizer.eos_token
-    encoding = tokenizer(full_text,
-                        padding="max_length",
-                        truncation=True,
-                        max_length=256,
-                        return_tensors="pt")
+    full = tokenizer(full_text, padding="max_length", truncation=True, max_length=128)
 
-    # 🔥 Exact answer position detection using token IDs
-    answer_start = encoding.input_ids[0].tolist().index(tokenizer.convert_tokens_to_ids("<answer>"))
-    labels = [-100] * answer_start + encoding.input_ids[0].tolist()[answer_start:]
-    encoding["labels"] = torch.tensor(labels)
-    return encoding
+    input_ids = full["input_ids"]
+    question_len = len(tokenizer(question)["input_ids"])
+
+    # Create labels: mask out the prompt part
+    labels = [-100] * question_len + input_ids[question_len:]
+
+    for i in range(len(labels)):
+        if full["attention_mask"][i] == 0:
+            labels[i] = -100
+
+    full["labels"] = labels
+    return full
 
 def format_example(prompt: str, answer: str) -> dict[str, str]:
-    """🔥 Strict 6-decimal formatting to match validation"""
-    return {"question": prompt, "answer": f"{answer:.6f}"}
+    return {"question": prompt, "answer": f"<answer>{round(answer, 3)}</answer>"}
 
 
 class TokenizedDataset:
@@ -69,9 +77,9 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 5,  # Strictly ≤5 as per spec
-    lr: float = 3e-4,  # Optimal for numerical tasks
-    rank: int = 12,    # Max rank for 20MB limit
+    epochs: int = 5,  # Increased from 3
+    lr: float = 3e-4,  # Increased learning rate
+    rank: int = 8,
 ):
     """Fine‑tune SmolLM2 on the supervised *train* split and save a LoRA adapter.
 
@@ -87,8 +95,8 @@ def train_model(
 
     # 2) add LoRA adapter -------------------------------------------------- #
     lora_cfg = LoraConfig(
-        r=rank,
-        lora_alpha=rank*5,  # 60 (5× rank=12)
+        r=8,
+        lora_alpha=32,
         target_modules="all-linear",
         bias="none",
         task_type=TaskType.CAUSAL_LM,
@@ -100,36 +108,22 @@ def train_model(
     train_ds = TokenizedDataset(llm.tokenizer, Dataset("train"), format_example)
 
     # 4) trainer ----------------------------------------------------------- #
-    # Optimized training arguments
     args = TrainingArguments(
-        output_dir=output_dir,
-        logging_dir=output_dir,
-        report_to="tensorboard",
-        per_device_train_batch_size=32,
-        gradient_checkpointing=True,
+        output_dir=str(out_path),
+        logging_dir=str(out_path / "logs"),
         num_train_epochs=epochs,
+        per_device_train_batch_size=32,
         learning_rate=lr,
-        fp16=True,
-        save_strategy="no",
+        warmup_steps=20,
+        weight_decay=0.01,
+        gradient_checkpointing=True,
+        report_to="tensorboard",
+        fp16=torch.cuda.is_available(),
     )
 
-    trainer = Trainer(
-        model=get_peft_model(BaseLLM().model, lora_cfg).enable_input_require_grads(),
-        args=args,
-        train_dataset=TokenizedDataset(BaseLLM().tokenizer, Dataset("train"), format_example)
-    )
-
+    trainer = Trainer(model=llm.model, args=args, train_dataset=train_ds)
     print("Starting SFT training … (quick run for grader)")
     trainer.train()
-
-    print("\nSanity check predictions:")
-    test_samples = [
-        "Convert 3 kg to grams",
-        "Convert 5 miles to kilometers"
-    ]
-    preds = llm.answer(*test_samples)
-    for q, p in zip(test_samples, preds):
-        print(f"Q: {q}\nA: {p}\n")
 
     # 5) save adapter ------------------------------------------------------ #
     trainer.save_model(str(out_path))

@@ -116,8 +116,8 @@ class BaseLLM:
 
         decoded: list[str] = []
         for i, seq in enumerate(gen_ids):
-            new_tok = seq[starts[i] :]
-            decoded.append(self.tokenizer.decode(new_tok, skip_special_tokens=True))
+            start = starts[i // n_return]          # integer‑division fixes the index
+            decoded.append(self.tokenizer.decode(seq[start:], skip_special_tokens=True))
 
         # ---- reshape if caller asked for multiple return sequences ------ #
         if n_return == 1:
