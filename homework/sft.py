@@ -61,7 +61,7 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 7,
+    epochs: int = 10,
     lr: float = 1e-3,
     rank: int = 8,
 ):
@@ -89,11 +89,12 @@ def train_model(
         output_dir=str(out_path),
         logging_dir=str(out_path / "logs"),
         num_train_epochs=epochs,
-        per_device_train_batch_size=32,
+        per_device_train_batch_size=16,
         learning_rate=lr,
         gradient_checkpointing=True,
-        report_to="none",
+        report_to="tensorboard",
         fp16=torch.cuda.is_available(),
+        save_total_limit=1
     )
 
     trainer = Trainer(model=llm.model, args=args, train_dataset=train_ds)
