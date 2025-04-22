@@ -18,12 +18,10 @@ def load() -> BaseLLM:
 
 
 def format_example(prompt: str, answer: float) -> dict[str, str]:
-    # Round to 4 decimals and wrap in answer tags
     return {
         "question": prompt,
         "answer": f"<answer>{round(float(answer), 4)}</answer>"
     }
-
 
 def tokenize(tokenizer, question: str, answer: str):
     """Tokenize the input/output pair and mask the input when computing loss."""
@@ -61,8 +59,8 @@ class TokenizedDataset:
         return len(self.data)
 
     def __getitem__(self, idx):
-        prompt, answer = self.format_fn(*self.data[idx])
-        return tokenize(self.tokenizer, **prompt)
+        formated_data = self.format_fn(*self.data[idx])
+        return tokenize(self.tokenizer, **formated_data)
 
 
 def train_model(
