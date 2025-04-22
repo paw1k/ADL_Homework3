@@ -20,25 +20,29 @@ def load() -> BaseLLM:
 
 
 def tokenize(tokenizer, question: str, answer: str):
-    full_prompt = f"{question} Answer: {answer}{tokenizer.eos_token}"
+    """
+    Tokenize a data element.
+    We first append the <EOS> token to the question / answer pair.
+    Then we tokenize and construct the ground truth `labels`.
+    `labels[i] == -100` for the question or masked out parts, since we only want to supervise
+    the answer.
+    """
+    full_text = f"{question} {answer}{tokenizer.eos_token}"
+
     tokenizer.padding_side = "right"
     tokenizer.pad_token = tokenizer.eos_token
-    full = tokenizer(full_prompt, padding="max_length",
-                     truncation=True, max_length=128)
+    full = tokenizer(full_text, padding="max_length", truncation=True, max_length=128)
 
-    input_ids       = full["input_ids"]
-    attention_mask  = full["attention_mask"]
+    input_ids = full["input_ids"]
+    question_len = len(tokenizer(question)["input_ids"])
 
-    # --- safe lookup ----------------------------------------------------
-    answer_token_id = tokenizer.convert_tokens_to_ids("<answer>")
-    try:
-        label_start = input_ids.index(answer_token_id)
-    except ValueError:           # shouldn’t happen, but stay robust
-        label_start = len(input_ids)
-    # --------------------------------------------------------------------
+    # Create labels: mask out the prompt part
+    labels = [-100] * question_len + input_ids[question_len:]
 
-    labels = [-100] * label_start + input_ids[label_start:]
-    labels = [lbl if m else -100 for lbl, m in zip(labels, attention_mask)]
+    for i in range(len(labels)):
+        if full["attention_mask"][i] == 0:
+            labels[i] = -100
+
     full["labels"] = labels
     return full
 
@@ -50,23 +54,31 @@ class TokenizedDataset:
     """`torch.utils.data.Dataset`‑like wrapper that yields tokenised examples."""
 
     def __init__(self, tokenizer, data: Dataset, format_fn):
+        """
+        Use the
+        - BaseLLM.tokenizer
+        - Dataset
+        - format_fn which converts a data element into a dict with entries
+          - question: str
+          - answer: str
+        """
+        self.format_fn = format_fn
         self.tokenizer = tokenizer
         self.data = data
-        self.format_fn = format_fn
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        ex = self.format_fn(*self.data[idx])
-        return tokenize(self.tokenizer, **ex)
+        formated_data = self.format_fn(*self.data[idx])
+        return tokenize(self.tokenizer, **formated_data)
 
 
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 3,
-    lr: float = 2e-4,
+    epochs: int = 5,  # Increased from 3
+    lr: float = 3e-4,  # Increased learning rate
     rank: int = 8,
 ):
     """Fine‑tune SmolLM2 on the supervised *train* split and save a LoRA adapter.
@@ -82,12 +94,14 @@ def train_model(
     llm = BaseLLM()
 
     # 2) add LoRA adapter -------------------------------------------------- #
+    # Enhanced LoRA config
     lora_cfg = LoraConfig(
         r=8,
-        lora_alpha=16,
-        target_modules="all-linear",
+        lora_alpha=32,  # 4x rank for better learning
+        target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],  # Key transformer layers
         bias="none",
         task_type=TaskType.CAUSAL_LM,
+        modules_to_save=["lm_head"],  # Crucial for output quality
     )
     llm.model = get_peft_model(llm.model, lora_cfg)
     llm.model.enable_input_require_grads()  # needed together w/ gradient ckpt.
@@ -96,17 +110,18 @@ def train_model(
     train_ds = TokenizedDataset(llm.tokenizer, Dataset("train"), format_example)
 
     # 4) trainer ----------------------------------------------------------- #
+    # Optimized training arguments
     args = TrainingArguments(
         output_dir=str(out_path),
-        logging_dir=str(out_path / "logs"),
-        num_train_epochs=epochs,
         per_device_train_batch_size=32,
+        gradient_accumulation_steps=2,  # Better gradient estimation
         learning_rate=lr,
-        warmup_steps=20,
-        weight_decay=0.01,
+        num_train_epochs=epochs,
+        warmup_ratio=0.1,  # Better than fixed steps
+        logging_steps=10,
+        fp16=True,  # Enable mixed precision
         gradient_checkpointing=True,
-        report_to="tensorboard",
-        fp16=torch.cuda.is_available(),
+        optim="adamw_torch_fused",  # Faster optimizer
     )
 
     trainer = Trainer(model=llm.model, args=args, train_dataset=train_ds)
