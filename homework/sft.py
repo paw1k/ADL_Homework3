@@ -20,19 +20,22 @@ def load() -> BaseLLM:
     return llm
 
 def tokenize(tokenizer, question: str, answer: str):
-    full_prompt = f"{question} Answer: {answer}{tokenizer.eos_token}"
+    full_prompt = f"{question} Answer: {answer}"
 
     tokenizer.padding_side = "right"
     tokenizer.pad_token = tokenizer.eos_token
     full = tokenizer(full_prompt, padding="max_length", truncation=True, max_length=128)
 
+    # Find the position of <answer> token
+    answer_token_id = tokenizer.convert_tokens_to_ids('<answer>')
     input_ids = full["input_ids"]
 
     try:
-        label_start = input_ids.index(tokenizer.convert_tokens_to_ids(tokenizer.tokenize("<answer>")[0]))
+        label_start = input_ids.index(answer_token_id)
     except ValueError:
-        label_start = len(input_ids)  # fallback if <answer> not found
+        label_start = len(input_ids)  # Fallback
 
+    # Set labels
     labels = [-100] * label_start + input_ids[label_start:]
 
     for i in range(len(labels)):
@@ -68,10 +71,13 @@ def train_model(
     lr: float = 2e-4,
     rank: int = 8,
 ):
-    out_path = Path(output_dir).expanduser().resolve()
-    out_path.mkdir(parents=True, exist_ok=True)
-
+    # ... existing code ...
     llm = BaseLLM()
+
+    # Add special tokens
+    special_tokens = ['<answer>', '</answer>']
+    llm.tokenizer.add_special_tokens({'additional_special_tokens': special_tokens})
+    llm.model.resize_token_embeddings(len(llm.tokenizer))
 
     lora_cfg = LoraConfig(
         r=rank,

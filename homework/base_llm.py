@@ -9,8 +9,9 @@ device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is
 class BaseLLM:
     def __init__(self, checkpoint=checkpoint):
         self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+        self.tokenizer.add_special_tokens({'additional_special_tokens': ['<answer>', '</answer>']})
         self.model = AutoModelForCausalLM.from_pretrained(checkpoint).to(device)
-        self.device = device
+        self.model.resize_token_embeddings(len(self.tokenizer))
 
     def format_prompt(self, question: str) -> str:
         return f"{question} Answer:"
