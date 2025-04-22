@@ -44,6 +44,7 @@ class BaseLLM:
         """
         return self.batched_generate([prompt])[0]
 
+
     @overload
     def batched_generate(
         self, prompts: list[str], num_return_sequences: None = None, temperature: float = 0
@@ -62,71 +63,43 @@ class BaseLLM:
         This version returns a list of generation for each prompt.
         """
 
-    def batched_generate(
-        self,
-        prompts: list[str],
-        num_return_sequences: int | None = None,
-        temperature: float = 0.0,
-    ) -> list[str] | list[list[str]]:
-        """Efficiently decode *all* prompts in one forward‑pass.
-
-        The implementation follows the hints in the README: left‑pad prompts to
-        equal length, feed them through ``model.generate``, and finally decode.
-        """
-        from tqdm import tqdm  # imported lazily to avoid overhead in the grader
-
-        # ------------------------------------------------------------------ #
-        # recurse in micro batches if caller passes very large *prompts*
-        # ------------------------------------------------------------------ #
+    def batched_generate(self, prompts: list[str], num_return_sequences: int | None = None, temperature: float = 0) -> list[str] | list[list[str]]:
+        from tqdm import tqdm
         micro_batch_size = 32
         if len(prompts) > micro_batch_size:
             return [
-                r
-                for idx in tqdm(
-                    range(0, len(prompts), micro_batch_size),
-                    desc=f"LLM micro‑batches (size={micro_batch_size})",
-                )
-                for r in self.batched_generate(
-                    prompts[idx : idx + micro_batch_size], num_return_sequences, temperature
-                )
+                r for idx in tqdm(range(0, len(prompts), micro_batch_size), desc=f"LLM Running on Micro Batches {micro_batch_size}")
+                for r in self.batched_generate(prompts[idx : idx + micro_batch_size], num_return_sequences, temperature)
             ]
 
-        # ------------------- tokenizer & generation params --------------- #
         self.tokenizer.padding_side = "left"
         self.tokenizer.pad_token = self.tokenizer.eos_token
+        tokenizer_output = self.tokenizer(prompts, padding=True, return_tensors="pt", return_attention_mask=True)
+        input_ids = tokenizer_output.input_ids.to(self.device)
+        attention_mask = tokenizer_output.attention_mask.to(self.device)
 
-        tok_batch = self.tokenizer(prompts, padding=True, return_tensors="pt").to(self.device)
-        n_return = num_return_sequences or 1
-        do_sample = temperature > 0.0
+        generation_args = {
+            "max_new_tokens": 50,
+            "do_sample": temperature > 0,
+            "temperature": temperature,
+            "num_return_sequences": num_return_sequences or 1,
+            "eos_token_id": self.tokenizer.eos_token_id,
+            "pad_token_id": self.tokenizer.eos_token_id,
+        }
 
-        with torch.no_grad():
-            gen_ids = self.model.generate(
-                **tok_batch,
-                max_new_tokens=64,
-                do_sample=do_sample,
-                temperature=temperature if do_sample else None,
-                num_return_sequences=n_return,
-                eos_token_id=self.tokenizer.eos_token_id,
-            )
+        generated = self.model.generate(input_ids=input_ids, attention_mask=attention_mask, **generation_args)
+        input_lens = attention_mask.sum(dim=1).tolist()
+        num_returns = generation_args["num_return_sequences"]
+        expanded_input_lens = [l for l in input_lens for _ in range(num_returns)]
 
-                # ------------------ slice away the prompt portion ---------------- #
-        attn = tok_batch["attention_mask"]  # (batch, seq_len)
-        seq_len = attn.shape[1]
-        starts = attn.sum(dim=1).tolist()  # prompt length for each item (left‑padding‑aware)
+        generated_sequences = generated.sequences.cpu()
+        generated_tokens = []
+        for i, seq in enumerate(generated_sequences):
+            start = expanded_input_lens[i]
+            generated_tokens.append(seq[start:])
 
-        decoded: list[str] = []
-        for i, seq in enumerate(gen_ids):
-            new_tok = seq[starts[i] :]
-            decoded.append(self.tokenizer.decode(new_tok, skip_special_tokens=True))
-
-        # ---- reshape if caller asked for multiple return sequences ------ #
-        if n_return == 1:
-            return decoded  # type: ignore[return-value]
-
-        grouped: list[list[str]] = [
-            decoded[i * n_return : (i + 1) * n_return] for i in range(len(prompts))
-        ]
-        return grouped
+        generations = self.tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+        return [generations[i*num_returns:(i+1)*num_returns] for i in range(len(prompts))] if num_return_sequences else generations
 
 #         raise NotImplementedError()
 

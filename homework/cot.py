@@ -4,53 +4,14 @@ from .base_llm import BaseLLM
 class CoTModel(BaseLLM):
     """LLM that uses two strong in‑context examples and forces <answer> tags."""
 
-    # Two diverse examples
-    _EXAMPLES = [
-        (
-            "How many gram are there per 3 kg?",
-            "1 kg = 1000 g\n3 kg × 1000 g/kg = 3000 g\n<answer>3000</answer>",
-        ),
-        (
-            "Convert 5 mile to meter.",
-            "1 mile = 1609.344 m\n5 mile × 1609.344 m/mile = 8046.72 m\n<answer>8046.72</answer>",
-        ),
-        (
-            "Convert 8 km/h to m/s.",
-            "1 km = 1000 m, 1 h = 3600 s\n(8 × 1000) / 3600 = 2.222222… m/s\n<answer>2.2222222222222223</answer>",
-        ),
-    ]
-
-    def format_prompt(self, question: str) -> str:  # noqa: D401
-        """Return a chat template prompt.
-
-        **Contract for the model** (spelled out in *system* message):
-        1. Begin the response with the numeric result wrapped in `<answer>` tags.
-        2. Afterwards, add one short sentence of reasoning.
-        This guarantees `parse_answer` will always find the tag even if the
-        model later truncates.
-        """
-
-        # System instruction – short & strict
-        sys_msg = (
-            "You are a unit‑conversion expert. "
-            "First think step‑by‑step and write the calculation, "
-            "then on a new line output the result as <answer>NUMBER</answer>."
-        )
-
-        messages: list[dict[str, str]] = [{"role": "system", "content": sys_msg}]
-
-        # Add our worked examples
-        for q, a in self._EXAMPLES:
-            messages.append({"role": "user", "content": q})
-            messages.append({"role": "assistant", "content": a})
-
-        # Finally the real question
-        messages.append({"role": "user", "content": question})
-
-        return self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-
+def format_prompt(self, question: str) -> str:
+        messages = [
+            {"role": "system", "content": "Convert units accurately. Use step-by-step reasoning and put the final answer within <answer> tags."},
+            {"role": "user", "content": "How many gram are there per 6 kg?"},
+            {"role": "assistant", "content": "1 kg = 1000 grams. So 6 kg = 6 * 1000 = <answer>6000</answer> grams."},
+            {"role": "user", "content": question}
+        ]
+        return self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
 #         raise NotImplementedError()
 
 

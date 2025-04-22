@@ -42,12 +42,8 @@ def tokenize(tokenizer, question: str, answer: str):
     full["labels"] = labels
     return full
 
-def format_example(question: str, answer: float) -> dict[str, str]:
-    return {
-        "question": question,
-        "answer": f"<answer>{round(answer, 4)}</answer>"
-    }
-
+def format_example(prompt: str, answer: str) -> dict[str, str]:
+    return {"question": prompt, "answer": f"<answer>{round(answer, 3)}</answer>"}
 
 
 class TokenizedDataset:
