@@ -64,9 +64,9 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 5,
-    lr: float = 2e-4,
-    rank: int = 5,
+    epochs: int = 3,
+    lr: float = 2e-3,
+    rank: int = 4,
 ):
     """Fine‑tune SmolLM2 on the supervised *train* split and save a LoRA adapter.
 
@@ -83,7 +83,7 @@ def train_model(
     # 2) add LoRA adapter -------------------------------------------------- #
     lora_cfg = LoraConfig(
         r=8,
-        lora_alpha=32,
+        lora_alpha=16,
         target_modules="all-linear",
         bias="none",
         task_type=TaskType.CAUSAL_LM,
@@ -110,10 +110,10 @@ def train_model(
 
     trainer = Trainer(model=llm.model, args=args, train_dataset=train_ds)
     print("Starting SFT training … (quick run for grader)")
-    trainer.train()
+    Trainer.train()
 
     # 5) save adapter ------------------------------------------------------ #
-    trainer.save_model(str(out_path))
+    Trainer.save_model(str(out_path))
 
     # also copy to canonical path expected by the grader
     canonical = Path(__file__).parent / "sft_model"
