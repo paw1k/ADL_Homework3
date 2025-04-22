@@ -61,8 +61,8 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 10,
-    lr: float = 1e-3,
+    epochs: int = 5,
+    lr: float = 5e-4,
     rank: int = 8,
 ):
     """Fine-tune SmolLM2 using LoRA for direct answer generation."""
@@ -93,7 +93,7 @@ def train_model(
         learning_rate=lr,
         gradient_checkpointing=True,
         report_to="tensorboard",
-        fp16=torch.cuda.is_available(),
+        fp16=True,
         save_total_limit=1
     )
 
