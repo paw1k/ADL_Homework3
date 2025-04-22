@@ -12,6 +12,7 @@ class BaseLLM:
         self.tokenizer.add_special_tokens({'additional_special_tokens': ['<answer>', '</answer>']})
         self.model = AutoModelForCausalLM.from_pretrained(checkpoint).to(device)
         self.model.resize_token_embeddings(len(self.tokenizer))
+        self.device = device
 
     def format_prompt(self, question: str) -> str:
         return f"{question} Answer:"
