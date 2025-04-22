@@ -20,29 +20,19 @@ def load() -> BaseLLM:
 
 
 def tokenize(tokenizer, question: str, answer: str):
-    """
-    Tokenize a data element.
-    We first append the <EOS> token to the question / answer pair.
-    Then we tokenize and construct the ground truth `labels`.
-    `labels[i] == -100` for the question or masked out parts, since we only want to supervise
-    the answer.
-    """
-    full_text = f"{question} {answer}{tokenizer.eos_token}"
-
+    # Simplified prompt format without extra text
+    full_prompt = f"{question}<answer>{answer}</answer>{tokenizer.eos_token}"
     tokenizer.padding_side = "right"
     tokenizer.pad_token = tokenizer.eos_token
-    full = tokenizer(full_text, padding="max_length", truncation=True, max_length=128)
+    full = tokenizer(full_prompt,
+                    padding="max_length",
+                    truncation=True,
+                    max_length=256)  # Increased context length
 
-    input_ids = full["input_ids"]
-    question_len = len(tokenizer(question)["input_ids"])
-
-    # Create labels: mask out the prompt part
-    labels = [-100] * question_len + input_ids[question_len:]
-
-    for i in range(len(labels)):
-        if full["attention_mask"][i] == 0:
-            labels[i] = -100
-
+    # Find answer start using token IDs
+    answer_start = full.input_ids.index(tokenizer.encode("<answer>")[0])
+    labels = [-100]*answer_start + full.input_ids[answer_start:]
+    labels = [l if m else -100 for l, m in zip(labels, full.attention_mask)]
     full["labels"] = labels
     return full
 
