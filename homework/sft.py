@@ -65,8 +65,8 @@ def train_model(
     output_dir: str = "homework/sft_model",
     *,
     epochs: int = 5,
-    lr: float = 2e-3,
-    rank: int = 4,
+    lr: float = 2e-4,
+    rank: int = 5,
 ):
     """Fine‑tune SmolLM2 on the supervised *train* split and save a LoRA adapter.
 
@@ -99,12 +99,12 @@ def train_model(
         output_dir=str(out_path),
         logging_dir=str(out_path / "logs"),
         num_train_epochs=epochs,
-        per_device_train_batch_size=16,
+        per_device_train_batch_size=32,
         learning_rate=lr,
         warmup_steps=20,
         weight_decay=0.01,
         gradient_checkpointing=True,
-        report_to="none",
+        report_to="tensorboard",
         fp16=torch.cuda.is_available(),
     )
 
