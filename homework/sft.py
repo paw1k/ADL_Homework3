@@ -17,10 +17,10 @@ def load() -> BaseLLM:
     return llm
 
 
-def format_example(question: str, answer: float) -> Dict[str, str]:
+def format_example(prompt: str, answer: float) -> dict[str, str]:
     return {
-        "question": question.strip(),
-        "answer": f"<answer>{round(answer, 4)}</answer>",
+        "question": prompt,
+        "answer": f"<answer>{round(answer, 4)}</answer>",  # round to 4 decimals max
     }
 
 def tokenize(tokenizer, question: str, answer: str):
