@@ -21,25 +21,26 @@ def load() -> BaseLLM:
 
 def tokenize(tokenizer, question: str, answer: str):
     full_prompt = f"{question} Answer: {answer}{tokenizer.eos_token}"
-
     tokenizer.padding_side = "right"
     tokenizer.pad_token = tokenizer.eos_token
+    full = tokenizer(full_prompt, padding="max_length",
+                     truncation=True, max_length=128)
 
-    full = tokenizer(full_prompt, padding="max_length", truncation=True, max_length=128)
-    input_ids = full["input_ids"]
-    attention_mask = full["attention_mask"]
+    input_ids       = full["input_ids"]
+    attention_mask  = full["attention_mask"]
 
-    # mask everything before the answer
-    label_start = full["input_ids"].index(tokenizer.convert_tokens_to_ids(tokenizer.tokenize("<answer>")[0]))
+    # --- safe lookup ----------------------------------------------------
+    answer_token_id = tokenizer.convert_tokens_to_ids("<answer>")
+    try:
+        label_start = input_ids.index(answer_token_id)
+    except ValueError:           # shouldn’t happen, but stay robust
+        label_start = len(input_ids)
+    # --------------------------------------------------------------------
+
     labels = [-100] * label_start + input_ids[label_start:]
-
-
-    labels = [-100] * label_start + input_ids[label_start:]
-    labels = [l if m == 1 else -100 for l, m in zip(labels, attention_mask)]
-
+    labels = [lbl if m else -100 for lbl, m in zip(labels, attention_mask)]
     full["labels"] = labels
     return full
-
 
 def format_example(question: str, answer: float) -> dict[str, str]:
     return {
@@ -68,9 +69,9 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 5,
-    lr: float = 1e-4,
-    rank: int = 4,
+    epochs: int = 3,
+    lr: float = 2e-4,
+    rank: int = 8,
 ):
     """Fine‑tune SmolLM2 on the supervised *train* split and save a LoRA adapter.
 
