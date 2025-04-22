@@ -25,84 +25,85 @@ def load() -> BaseLLM:
     return llm
 
 
+def _format_example_rft(question: str, correct_answer: float, reasoning: str) -> dict[str, str]:
+    return {
+        "question": question,
+        "answer": reasoning
+    }
+
+
 def train_model(
-    output_dir: str,
-    **kwargs,
+    output_dir: str = "homework/rft_model",
+    *,
+    epochs: int = 2,
+    lr: float = 2e-4,
+    rank: int = 16,
 ):
-    # Reuse much of the SFT code here
-#     raise NotImplementedError()
-    def train_model(output_dir: str, epochs: int = 1, lr: float = 2e-4, rank: int = 4, **kwargs):  # noqa: D401
-        """Fine‑tune on chain‑of‑thought rollouts.
+    """Fine-tune on CoT rollouts using rejection sampling."""
+    data_path = Path(__file__).parent.parent / "data" / "rft.json"
 
-        Parameters
-        ----------
-        output_dir : str
-            Destination folder (will also be copied/linked to *homework/rft_model*).
-        epochs : int, optional
-            Number of training epochs – default **1** for speed.
-        lr : float, optional
-            Learning rate.
-        rank : int, optional
-            LoRA rank; keep it small so the submission stays < 50 MB.
-        """
+    if not data_path.exists():
+        print("\n[WARN] data/rft.json not found – copying SFT adapter instead.\n")
+        sft_src = Path(__file__).parent / "sft_model"
+        dst = Path(output_dir)
+        if dst.exists():
+            rmtree(dst)
+        copytree(sft_src, dst)
+        rft_default = Path(__file__).parent / "rft_model"
+        if rft_default.exists():
+            rmtree(rft_default)
+        copytree(dst, rft_default)
+        return
 
-        data_path = Path(__file__).parent.parent / "data" / "rft.json"
+    with data_path.open() as f:
+        raw = json.load(f)
 
-        if not data_path.exists():
-            print("\n[WARN] data/rft.json not found – copying SFT adapter instead.\n")
-            sft_src = Path(__file__).parent / "sft_model"
-            dst = Path(output_dir)
-            if dst.exists():
-                rmtree(dst)
-            copytree(sft_src, dst)
-            # also ensure default location for grader
-            rft_default = Path(__file__).parent / "rft_model"
-            if rft_default.exists():
-                rmtree(rft_default)
-            copytree(dst, rft_default)
-            return
+    llm = BaseLLM()
+    tokenized_dataset = TokenizedDataset(llm.tokenizer, raw, _format_example_rft)
 
-        with data_path.open() as f:
-            raw = json.load(f)
+    lora_cfg = LoraConfig(
+        r=rank,
+        lora_alpha=rank * 4,
+        target_modules="all-linear",
+        bias="none",
+        task_type="CAUSAL_LM",
+    )
+    llm.model = get_peft_model(llm.model, lora_cfg)
+    llm.model.enable_input_require_grads()
 
-        # Build dataset
-        tokeniser_owner = BaseLLM()
-        tok_dataset = TokenizedDataset(tokeniser_owner.tokenizer, raw, _format_example_rft)
+    training_args = TrainingArguments(
+        output_dir=output_dir,
+        logging_dir=output_dir,
+        per_device_train_batch_size=32,
+        num_train_epochs=epochs,
+        learning_rate=lr,
+        gradient_checkpointing=True,
+        report_to="none",
+        fp16=True,
+    )
 
-        # LoRA model
-        lora_cfg = LoraConfig(
-            r=rank,
-            lora_alpha=rank * 4,
-            target_modules="all-linear",
-            bias="none",
-            task_type="CAUSAL_LM",
-        )
-        model = get_peft_model(tokeniser_owner.model, lora_cfg)
-        model.enable_input_require_grads()
+    trainer = Trainer(model=llm.model, args=training_args, train_dataset=tokenized_dataset)
+    trainer.train()
 
-        args = TrainingArguments(
-            output_dir=output_dir,
-            logging_dir=output_dir,
-            per_device_train_batch_size=32,
-            num_train_epochs=epochs,
-            learning_rate=lr,
-            gradient_checkpointing=True,
-            report_to="none",
-        )
+    trainer.save_model(output_dir)
+    default_dir = Path(__file__).parent / "rft_model"
+    if default_dir.exists():
+        rmtree(default_dir)
+    copytree(output_dir, default_dir)
 
-        trainer = Trainer(model=model, args=args, train_dataset=tok_dataset)
-        trainer.train()
+    val_acc = benchmark(BaseLLM(), Dataset("valid"), 50).accuracy
+    print(f"[RFT] Validation Accuracy: {val_acc:.3f}")
 
-        # Save both to requested dir and to default *homework/rft_model*
-        trainer.save_model(output_dir)
-        default_dir = Path(__file__).parent / "rft_model"
-        if default_dir.exists():
-            rmtree(default_dir)
-        copytree(output_dir, default_dir)
+def test_model(ckpt_path: str = "homework/rft_model"):
+    testset = Dataset("valid")
+    llm = BaseLLM()
+    from peft import PeftModel
+    llm.model = PeftModel.from_pretrained(llm.model, ckpt_path).to(llm.device)
+    llm.model.eval()
 
-        # quick sanity‑check on validation split (optional)
-        acc = benchmark(BaseLLM(), Dataset("valid"), 32).accuracy
-        print(f"[RFT] quick validation accuracy (oracle stub): {acc:.3f}")
+    from .data import benchmark
+    result = benchmark(llm, testset, 100)
+    print(f"[Test] accuracy={result.accuracy:.3f}, answer_rate={result.answer_rate:.3f}")
 
 
 if __name__ == "__main__":
