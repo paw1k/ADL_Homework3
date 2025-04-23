@@ -6,12 +6,11 @@ from .cot import CoTModel
 from .data import Dataset, is_answer_valid
 
 def generate_dataset(
-    output_json: Optional[str] = None,
+    output_json: "data/rft.json"
     *,
     oversample: int = 10,
     temperature: float = 0.6,
 ):
-    """Create an RFT dataset via Chain‑of‑Thought sampling."""
     pkg_root = Path(__file__).parent.parent
     if output_json is None:
         output_json = pkg_root / "data" / "rft.json"
@@ -30,7 +29,7 @@ def generate_dataset(
         )
 
         if not generations_batch or not generations_batch[0]:
-            continue  # skip this example if no valid generations
+            continue
 
         generations = generations_batch[0]
 
