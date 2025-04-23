@@ -8,8 +8,7 @@ from transformers import Trainer, TrainingArguments
 
 from .base_llm import BaseLLM
 from .sft import tokenize, TokenizedDataset, test_model         # ← reuse existing helpers
-from .data import benchmark                                     # for quick validation
-
+from .data import Dataset, benchmark
 
 # ---------------------------------------------------------------
 # Inference loader (identical pattern to SFT) -------------------
