@@ -86,7 +86,7 @@ def train_model(
         bias="none",
         task_type="CAUSAL_LM"
     )
-    llm.model = get_peft_model(llm.model, lora_cfg)
+    llm.model = get_peft_model(llm.model, config)
     llm.model.enable_input_require_grads()
 
     # Tokenized training dataset
