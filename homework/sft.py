@@ -67,18 +67,15 @@ class TokenizedDataset:
 
 def train_model(
     output_dir: str = "homework/sft_model",
-    *,
     epochs: int = 8,
     lr: float = 2e-4,
     rank: int = 8,
 ):
-    """Fine-tune SmolLM2 using LoRA for direct answer generation."""
     out_path = Path(output_dir).resolve()
     out_path.mkdir(parents=True, exist_ok=True)
 
     llm = BaseLLM()
 
-    # Attach LoRA
     config = LoraConfig(
         r=rank,
         lora_alpha=32,
@@ -89,7 +86,6 @@ def train_model(
     llm.model = get_peft_model(llm.model, config)
     llm.model.enable_input_require_grads()
 
-    # Tokenized training dataset
     train_ds = TokenizedDataset(llm.tokenizer, Dataset("train"), format_example)
 
     args = TrainingArguments(
@@ -98,7 +94,7 @@ def train_model(
         num_train_epochs=epochs,
         learning_rate=lr,
         gradient_checkpointing=True,
-        report_to="none",
+        report_to="tensorboard",
         logging_dir=output_dir,
         logging_steps=10,
         save_strategy="no"
@@ -110,13 +106,11 @@ def train_model(
     trainer.train()
     trainer.save_model(str(out_path))
 
-    # Save also to homework/sft_model for grader compatibility
     canonical = Path(__file__).parent / "sft_model"
     if canonical.resolve() != out_path.resolve():
         canonical.mkdir(parents=True, exist_ok=True)
         copytree(out_path, canonical, dirs_exist_ok=True)
 
-    # Validate
     val = benchmark(llm, Dataset("valid"), 50)
     print(f"Validation   acc={val.accuracy:.3f}   answer‑rate={val.answer_rate:.3f}")
     print(val.accuracy)
