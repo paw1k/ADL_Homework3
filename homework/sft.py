@@ -68,7 +68,7 @@ class TokenizedDataset:
 def train_model(
     output_dir: str = "homework/sft_model",
     *,
-    epochs: int = 5,
+    epochs: int = 8,
     lr: float = 2e-4,
     rank: int = 8,
 ):
@@ -80,7 +80,7 @@ def train_model(
 
     # Attach LoRA
     config = LoraConfig(
-        r=8,
+        r=rank,
         lora_alpha=32,
         target_modules="all-linear",
         bias="none",

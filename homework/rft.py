@@ -35,7 +35,7 @@ def _format_example_rft(question: str, correct_answer: float, reasoning: str) ->
 def train_model(
     output_dir: str = "homework/rft_model",
     *,
-    epochs: int = 2,
+    epochs: int = 8,
     lr: float = 2e-4,
     rank: int = 16,
 ):
