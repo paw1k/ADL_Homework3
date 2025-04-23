@@ -7,17 +7,21 @@ class CoTModel(BaseLLM):
     # Two diverse examples
     _EXAMPLES = [
         (
-            "How many gram are there per 3 kg?",
-            "1 kg = 1000 g\n3 kg × 1000 g/kg = 3000 g\n<answer>3000</answer>",
+            "Can you change 2 hour to its equivalent in min?",
+            "1 hour = 60 minutes. 2 * 60 = <answer>120.0</answer>"
         ),
         (
-            "Convert 5 mile to meter.",
-            "1 mile = 1609.344 m\n5 mile × 1609.344 m/mile = 8046.72 m\n<answer>8046.72</answer>",
+            "What is the conversion of 3 kg to ounce?",
+            "1 kg = 35.27396195 ounces. 3 * 35.27396195 = <answer>105.82188585</answer>"
         ),
         (
-            "Convert 8 km/h to m/s.",
-            "1 km = 1000 m, 1 h = 3600 s\n(8 × 1000) / 3600 = 2.222222… m/s\n<answer>2.2222222222222223</answer>",
+            "Convert 5 mi/h to m/s?",
+            "1 mi = 1609.344 m, 1 h = 3600 s. So 5 mi/h = (5 * 1609.344) / 3600 = <answer>2.2352</answer>"
         ),
+        (
+            "What is 6 litre in millilitre?",
+            "1 litre = 1000 millilitres. 6 * 1000 = <answer>6000.0</answer>"
+        )
     ]
 
     def format_prompt(self, question: str) -> str:  # noqa: D401
