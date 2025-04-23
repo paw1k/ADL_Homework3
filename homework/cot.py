@@ -34,11 +34,10 @@ class CoTModel(BaseLLM):
         model later truncates.
         """
 
-        # System instruction – short & strict
         sys_msg = (
-            "You are a helpful and accurate unit conversion expert assistant.  "
-            "First think step‑by‑step and write the calculation, "
-            "then on a new line output the result as <answer>NUMBER</answer>."
+            "You are a helpful and accurate unit conversion assistant. "
+            "For each question, calculate step-by-step, then give the final answer "
+            "wrapped in <answer> tags on a new line. Be concise and precise."
         )
 
         messages: list[dict[str, str]] = [{"role": "system", "content": sys_msg}]
