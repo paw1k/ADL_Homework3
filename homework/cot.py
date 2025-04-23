@@ -7,20 +7,20 @@ class CoTModel(BaseLLM):
     # Two diverse examples
     _EXAMPLES = [
         (
-            "Can you change 2 hour to its equivalent in min?",
-            "1 hour = 60 minutes. 2 * 60 = <answer>120.0</answer>"
+            "Could you provide the value of 4 kmh in mph?",
+            "To convert km/h to mi/h, use the factor 1 km/h ≈ 0.621371. Multiply the speed by 0.621371.\n<answer>2.4854847689493362</answer>"
         ),
         (
-            "What is the conversion of 3 kg to ounce?",
-            "1 kg = 35.27396195 ounces. 3 * 35.27396195 = <answer>105.82188585</answer>"
+            "What is the equivalent of 7 pound in kg?",
+            "1 pound = 0.45359237 kg. Multiply 7 * 0.45359237 to convert to kilograms.\n<answer>3.17514659</answer>"
         ),
         (
-            "Convert 5 mi/h to m/s?",
-            "1 mi = 1609.344 m, 1 h = 3600 s. So 5 mi/h = (5 * 1609.344) / 3600 = <answer>2.2352</answer>"
+            "What is the measurement of 6 decades when converted into year?",
+            "1 decade = 10 years. Multiply 6 * 10.\n<answer>60.0</answer>"
         ),
         (
-            "What is 6 litre in millilitre?",
-            "1 litre = 1000 millilitres. 6 * 1000 = <answer>6000.0</answer>"
+            "Tell me how many fluid ounce are there in 2 l.",
+            "1 liter = 33.814 fluid ounces. Multiply 2 * 33.814.\n<answer>67.62804540368597</answer>"
         )
     ]
 
