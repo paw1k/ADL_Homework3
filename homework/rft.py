@@ -91,7 +91,7 @@ def train_model(
         copytree(out, canonical, dirs_exist_ok=True)
 
     # quick sanity check on 50 samples
-    val = benchmark(llm, train_ds, 50)
+    val = benchmark(llm, Dataset("valid"), 50)
     print(f"✓ validation  acc={val.accuracy:.3f}   ans-rate={val.answer_rate:.3f}")
 
 
