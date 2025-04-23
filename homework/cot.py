@@ -33,7 +33,7 @@ class CoTModel(BaseLLM):
         # System instruction – short & strict
         sys_msg = (
             "You are a helpful and accurate unit conversion expert assistant.  "
-            "Please solve the conversion step-by-step and write the calculation, "
+            "Please solve the conversion step-by-step and write the calculation. "
             "At the end, write the final result inside <answer> tags on a new line."
         )
 
