@@ -68,16 +68,9 @@ class BaseLLM:
         num_return_sequences: int | None = None,
         temperature: float = 0.0,
     ) -> list[str] | list[list[str]]:
-        """Efficiently decode *all* prompts in one forward‑pass.
 
-        The implementation follows the hints in the README: left‑pad prompts to
-        equal length, feed them through ``model.generate``, and finally decode.
-        """
-        from tqdm import tqdm  # imported lazily to avoid overhead in the grader
+        from tqdm import tqdm
 
-        # ------------------------------------------------------------------ #
-        # recurse in micro batches if caller passes very large *prompts*
-        # ------------------------------------------------------------------ #
         micro_batch_size = 32
         if len(prompts) > micro_batch_size:
             return [
@@ -91,7 +84,7 @@ class BaseLLM:
                     )
             ]
 
-        # ------------------- tokenizer & generation params --------------- #
+
         self.tokenizer.padding_side = "left"
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -109,19 +102,17 @@ class BaseLLM:
                 eos_token_id=self.tokenizer.eos_token_id,
             )
 
-                # ------------------ slice away the prompt portion ---------------- #
-        attn = tok_batch["attention_mask"]  # (batch, seq_len)
+        attn = tok_batch["attention_mask"]
         seq_len = attn.shape[1]
-        starts = attn.sum(dim=1).tolist()  # prompt length for each item (left‑padding‑aware)
+        starts = attn.sum(dim=1).tolist()
 
         decoded: list[str] = []
         for i, seq in enumerate(gen_ids):
-            start = starts[i // n_return]          # integer‑division fixes the index
+            start = starts[i // n_return]
             decoded.append(self.tokenizer.decode(seq[start:], skip_special_tokens=True))
 
-        # ---- reshape if caller asked for multiple return sequences ------ #
         if n_return == 1:
-            return decoded  # type: ignore[return-value]
+            return decoded
 
         grouped: list[list[str]] = [
             decoded[i * n_return : (i + 1) * n_return] for i in range(len(prompts))

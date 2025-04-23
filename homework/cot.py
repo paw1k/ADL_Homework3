@@ -2,9 +2,6 @@ from .base_llm import BaseLLM
 
 
 class CoTModel(BaseLLM):
-    """LLM that uses two strong in‑context examples and forces <answer> tags."""
-
-    # Two diverse examples
     _EXAMPLES = [
         (
             "Could you provide the value of 4 kmh in mph?",
@@ -24,7 +21,7 @@ class CoTModel(BaseLLM):
         )
     ]
 
-    def format_prompt(self, question: str) -> str:  # noqa: D401
+    def format_prompt(self, question: str) -> str:
         """Return a chat template prompt.
 
         **Contract for the model** (spelled out in *system* message):
@@ -42,12 +39,10 @@ class CoTModel(BaseLLM):
 
         messages: list[dict[str, str]] = [{"role": "system", "content": sys_msg}]
 
-        # Add our worked examples
         for q, a in self._EXAMPLES:
             messages.append({"role": "user", "content": q})
             messages.append({"role": "assistant", "content": a})
 
-        # Finally the real question
         messages.append({"role": "user", "content": question})
 
         return self.tokenizer.apply_chat_template(
