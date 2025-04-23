@@ -17,27 +17,34 @@ def load() -> BaseLLM:
     return llm
 
 
-def format_example(prompt: str, answer: str) -> dict[str, str]:
+def format_example(prompt: str, answer: float) -> dict[str, str]:
     return {
-        "question": prompt,
-        "answer": f"<answer>{round(answer, 4)}</answer>"
+        "question": prompt.strip(),
+        "answer": f"<answer>{round(answer, 3)}</answer>"
     }
 
 def tokenize(tokenizer, question: str, answer: str):
+    """
+    Tokenize a data element.
+    We first append the <EOS> token to the question / answer pair.
+    Then we tokenize and construct the ground truth `labels`.
+    `labels[i] == -100` for the question or masked out parts, since we only want to supervise
+    the answer.
+    """
     full_text = f"{question} {answer}{tokenizer.eos_token}"
-    tokenizer.pad_token = tokenizer.eos_token
+
     tokenizer.padding_side = "right"
+    tokenizer.pad_token = tokenizer.eos_token
     full = tokenizer(full_text, padding="max_length", truncation=True, max_length=128)
 
     input_ids = full["input_ids"]
-    q_ids = tokenizer(question, truncation=True, max_length=128)["input_ids"]
-    q_len = len(q_ids)
+    question_len = len(tokenizer(question)["input_ids"])
 
-    labels = [-100] * q_len + input_ids[q_len:]
-    labels = labels[:128] + [-100] * max(0, 128 - len(labels))  # pad/truncate to match
+    # Create labels: mask out the prompt part
+    labels = [-100] * question_len + input_ids[question_len:]
 
-    for i, a in enumerate(full["attention_mask"]):
-        if a == 0:
+    for i in range(len(labels)):
+        if full["attention_mask"][i] == 0:
             labels[i] = -100
 
     full["labels"] = labels
@@ -72,12 +79,12 @@ def train_model(
     llm = BaseLLM()
 
     # Attach LoRA
-    lora_cfg = LoraConfig(
-        r=rank,
-        lora_alpha=rank * 4,
-        bias="none",
+    config = LoraConfig(
+        r=8,
+        lora_alpha=32,
         target_modules="all-linear",
-        task_type=TaskType.CAUSAL_LM,
+        bias="none",
+        task_type="CAUSAL_LM"
     )
     llm.model = get_peft_model(llm.model, lora_cfg)
     llm.model.enable_input_require_grads()
@@ -86,15 +93,15 @@ def train_model(
     train_ds = TokenizedDataset(llm.tokenizer, Dataset("train"), format_example)
 
     args = TrainingArguments(
-        output_dir=str(out_path),
-        logging_dir=str(out_path / "logs"),
-        num_train_epochs=epochs,
+        output_dir=output_dir,
         per_device_train_batch_size=32,
+        num_train_epochs=epochs,
         learning_rate=lr,
         gradient_checkpointing=True,
-        report_to="tensorboard",
-        fp16=True,
-        save_total_limit=1
+        report_to="none",
+        logging_dir=output_dir,
+        logging_steps=10,
+        save_strategy="no"
     )
 
     trainer = Trainer(model=llm.model, args=args, train_dataset=train_ds)
