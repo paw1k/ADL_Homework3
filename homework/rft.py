@@ -43,7 +43,7 @@ def train_model(
 
     cfg = LoraConfig(
         r=rank,
-        lora_alpha=5 * rank,
+        lora_alpha=32,
         target_modules="all-linear",
         bias="none",
         task_type="CAUSAL_LM",
