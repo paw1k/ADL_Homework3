@@ -3,7 +3,7 @@ from typing import overload
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-checkpoint = "HuggingFaceTB/SmolLM2-360M-Instruct"
+checkpoint = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
 
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
